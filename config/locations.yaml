@@ -1,0 +1,16 @@
+# Locations to record. Restart the container after editing.
+#
+#   id          short key used in URLs and the database (lowercase, digits, - or _)
+#   name        label shown on the dashboard
+#   latitude    decimal degrees
+#   longitude   decimal degrees
+#   timezone    optional IANA zone for the dashboard's time axis (defaults to the browser's)
+#   nwsStation  optional NWS observation station (US only), e.g. KRDU. Find one at
+#               https://api.weather.gov/points/{lat},{lon}/stations
+locations:
+  - id: raleigh
+    name: Raleigh, NC
+    latitude: 35.58
+    longitude: -78.80
+    timezone: America/New_York
+    nwsStation: KRDU

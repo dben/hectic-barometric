@@ -1,0 +1,16 @@
+services:
+  barometric:
+    image: ghcr.io/dben/hectic-barometric:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/locations.yaml:/config/locations.yaml:ro
+      - barometric-data:/data
+    environment:
+      TZ: America/New_York
+      # Identify yourself to api.weather.gov; they ask for a contact.
+      NWS_USER_AGENT: "hectic-barometric (you@example.com)"
+
+volumes:
+  barometric-data:

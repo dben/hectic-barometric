@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Barometric</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='%232a78d6' stroke-width='1.5'/><path d='M8 8 L11.5 5' stroke='%232a78d6' stroke-width='1.5' stroke-linecap='round'/></svg>">
+  <link rel="stylesheet" href="/vendor/uPlot.min.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>Barometric</h1>
+    <label class="field">
+      <span class="sr-only">Location</span>
+      <select id="location"></select>
+    </label>
+    <span id="status" class="muted"></span>
+  </header>
+
+  <main>
+    <section class="controls" aria-label="Filters">
+      <div class="seg" role="group" aria-label="Range" id="range">
+        <button data-days="1">24 h</button>
+        <button data-days="7">7 d</button>
+        <button data-days="30">30 d</button>
+        <button data-days="90">90 d</button>
+        <button data-days="365">1 y</button>
+      </div>
+      <div class="seg" role="group" aria-label="Pressure" id="field">
+        <button data-field="surface" title="Pressure at ground level">Surface</button>
+        <button data-field="msl" title="Reduced to sea level, comparable across places">Sea level</button>
+      </div>
+      <div class="seg" role="group" aria-label="Sources" id="sources">
+        <button data-source="open-meteo"><i class="key key-1"></i>Open-Meteo</button>
+        <button data-source="nws"><i class="key key-2"></i>NWS</button>
+      </div>
+      <div class="seg" role="group" aria-label="Units" id="units">
+        <button data-units="metric">hPa · °C</button>
+        <button data-units="us">inHg · °F</button>
+      </div>
+    </section>
+
+    <section class="controls swing-controls" aria-label="Swing detection">
+      <span class="label">Highlight swings of</span>
+      <input id="threshold" type="number" min="0" step="any" inputmode="decimal" aria-label="Swing threshold">
+      <span id="threshold-unit" class="muted"></span>
+      <span class="label">within</span>
+      <input id="window" type="number" min="1" max="72" step="1" inputmode="numeric" aria-label="Swing window in hours">
+      <span class="muted">h, from</span>
+      <select id="swing-source" aria-label="Swing source">
+        <option value="open-meteo">Open-Meteo</option>
+        <option value="nws">NWS</option>
+      </select>
+      <span class="legend-chip"><i class="band band-fall"></i>Falling</span>
+      <span class="legend-chip"><i class="band band-rise"></i>Rising</span>
+    </section>
+
+    <section class="tiles" id="tiles" aria-label="Current pressure"></section>
+
+    <p id="empty" class="empty" hidden></p>
+
+    <section class="charts">
+      <figure class="chart">
+        <figcaption>Pressure <span class="muted" id="pressure-caption"></span></figcaption>
+        <div id="chart-pressure"></div>
+      </figure>
+      <figure class="chart">
+        <figcaption>Temperature</figcaption>
+        <div id="chart-temp"></div>
+      </figure>
+      <figure class="chart">
+        <figcaption>Precipitation <span class="muted">per hour</span></figcaption>
+        <div id="chart-precip"></div>
+      </figure>
+      <figure class="chart">
+        <figcaption>Rain chance <span class="muted">Open-Meteo only</span></figcaption>
+        <div id="chart-prob"></div>
+      </figure>
+      <p class="hint muted">Drag across a chart to zoom. Double-click to reset.</p>
+    </section>
+
+    <section class="swings">
+      <h2>Swings <span class="muted" id="swing-count"></span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Start</th><th>End</th><th class="num">Hours</th><th class="num">Change</th><th class="num">Peak rate</th></tr>
+          </thead>
+          <tbody id="swing-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/vendor/uPlot.iife.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

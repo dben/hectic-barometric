@@ -1,0 +1,25 @@
+{
+  "name": "hectic-barometric",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Records hourly barometric pressure, temperature and precipitation for a set of locations",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node --disable-warning=ExperimentalWarning dist/src/index.js",
+    "dev": "npm run build && npm start",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --disable-warning=ExperimentalWarning --test dist/test/*.test.js"
+  },
+  "dependencies": {
+    "uplot": "1.6.32",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3"
+  }
+}
