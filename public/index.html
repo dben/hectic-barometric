@@ -35,6 +35,11 @@
         <button data-source="open-meteo"><i class="key key-1"></i>Open-Meteo</button>
         <button data-source="nws"><i class="key key-2"></i>NWS</button>
       </div>
+      <div class="seg" role="group" aria-label="Forecast" id="forecast">
+        <button data-days="0">No forecast</button>
+        <button data-days="2"><i class="key key-forecast"></i>2 d</button>
+        <button data-days="7"><i class="key key-forecast"></i>7 d</button>
+      </div>
       <div class="seg" role="group" aria-label="Units" id="units">
         <button data-units="metric">hPa · °C</button>
         <button data-units="us">inHg · °F</button>
@@ -54,6 +59,11 @@
       </select>
       <span class="legend-chip"><i class="band band-fall"></i>Falling</span>
       <span class="legend-chip"><i class="band band-rise"></i>Rising</span>
+    </section>
+
+    <section class="upcoming" id="upcoming" aria-label="Forecast swings" hidden>
+      <h2>Upcoming shifts <span class="muted" id="upcoming-note"></span></h2>
+      <ul id="upcoming-list"></ul>
     </section>
 
     <section class="tiles" id="tiles" aria-label="Current pressure"></section>

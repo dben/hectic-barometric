@@ -9,6 +9,7 @@ export interface Settings {
   retentionDays: number;
   backfillDays: number;
   collectMinute: number;
+  forecastDays: number;
   nwsUserAgent: string;
 }
 
@@ -28,6 +29,7 @@ export function loadSettings(): Settings {
     retentionDays: intEnv("RETENTION_DAYS", 365),
     backfillDays: intEnv("BACKFILL_DAYS", 365),
     collectMinute: intEnv("COLLECT_MINUTE", 5) % 60,
+    forecastDays: Math.min(Math.max(intEnv("FORECAST_DAYS", 7), 1), 16),
     nwsUserAgent:
       process.env.NWS_USER_AGENT ?? "hectic-barometric (https://github.com/dben/hectic-barometric)",
   };

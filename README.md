@@ -43,7 +43,7 @@ To find a nearby NWS station, open `https://api.weather.gov/points/{lat},{lon}/s
 
 NWS stations report every few minutes; the collector keeps the reading nearest each top of the hour, preferring the routine METAR.
 
-Open-Meteo's free API is for non-commercial use, capped at 10,000 calls a day. This app makes about 24 per location per day.
+Open-Meteo's free API is for non-commercial use, capped at 10,000 calls a day. This app makes about 24 per location per day, plus at most two an hour for forecasts while the dashboard is open.
 
 ## How collection works
 
@@ -55,6 +55,12 @@ Open-Meteo's free API is for non-commercial use, capped at 10,000 calls a day. T
 
 A swing is any stretch where pressure moved by at least the threshold within the window, for example 6 hPa in 12 h. Overlapping windows in the same direction merge, and each band is trimmed to the high and low points inside it. The window, threshold and source are set on the dashboard. A 3 h window mostly picks up the normal daily pressure cycle; 12–24 h windows catch fronts and storms.
 
+## Forecast
+
+The dashboard can extend each chart up to 7 days ahead with Open-Meteo's hourly forecast, drawn dashed over a shaded "Forecast" region. Swing detection runs on the forecast too, with the same window and threshold, and lists what it finds under "Upcoming shifts". It also looks back over the last window of recorded data, so a swing that has already started shows as under way.
+
+Forecasts aren't stored. The server fetches one per location when the dashboard asks and caches it in memory for 30 minutes.
+
 ## Settings
 
 | Variable | Default (in the image) | |
@@ -65,6 +71,7 @@ A swing is any stretch where pressure moved by at least the threshold within the
 | `RETENTION_DAYS` | `365` | |
 | `BACKFILL_DAYS` | `365` | |
 | `COLLECT_MINUTE` | `5` | Minute past each hour (UTC) |
+| `FORECAST_DAYS` | `7` | How far ahead to fetch, 1–16. The dashboard offers 2 or 7 days |
 | `NWS_USER_AGENT` | `hectic-barometric (https://github.com/dben/hectic-barometric)` | NWS asks for a contact, e.g. `myapp (me@example.com)` |
 
 ## API
@@ -74,6 +81,7 @@ A swing is any stretch where pressure moved by at least the threshold within the
 | `GET /api/locations` | Configured locations |
 | `GET /api/series?location=&from=&to=` | Hourly readings for both sources on shared timestamps (unix seconds) |
 | `GET /api/swings?location=&from=&to=&source=open-meteo\|nws&field=surface\|msl&window=12&threshold=6` | Detected swings; threshold in hPa |
+| `GET /api/forecast?location=&field=surface\|msl&window=12&threshold=6` | Forecast hours (not stored) and upcoming swings |
 | `GET /api/status` | Last collection run, errors, row counts |
 | `GET /healthz` | Liveness |
 

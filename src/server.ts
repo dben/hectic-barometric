@@ -4,6 +4,7 @@ import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Collector } from "./collector.js";
 import type { Store } from "./db.js";
+import type { ForecastCache } from "./forecast.js";
 import { findSwings } from "./swings.js";
 import { SOURCES, type Location, type Reading, type Source } from "./types.js";
 
@@ -65,7 +66,30 @@ export function alignSeries(bySource: Partial<Record<Source, Reading[]>>) {
   return { ts, series };
 }
 
-export function createApp(store: Store, locations: Location[], collector: Collector) {
+/**
+ * Forecast hours plus the swings expected in them. Detection also looks back over the last
+ * window of stored Open-Meteo history, so a swing already under way shows up as upcoming.
+ */
+export function forecastResponse(
+  store: Store,
+  loc: Location,
+  rows: Reading[],
+  field: "surfacePressure" | "mslPressure",
+  windowHours: number,
+  threshold: number,
+  now = Math.floor(Date.now() / 1000),
+) {
+  const history = store.read(loc.id, "open-meteo", now - Math.ceil(windowHours + 1) * 3600, now);
+  const lastHistory = history.at(-1)?.ts ?? now;
+  const future = rows.filter((r) => r.ts > lastHistory);
+  const all = [...history, ...future];
+  const swings = findSwings(all.map((r) => r.ts), all.map((r) => r[field]), windowHours, threshold)
+    .filter((s) => s.end > lastHistory);
+  const series = Object.fromEntries(FIELDS.map((f) => [f, future.map((r) => r[f])]));
+  return { ts: future.map((r) => r.ts), series, swings };
+}
+
+export function createApp(store: Store, locations: Location[], collector: Collector, forecasts: ForecastCache) {
   const byId = new Map(locations.map((l) => [l.id, l]));
 
   function range(params: URLSearchParams): [number, number] {
@@ -115,6 +139,17 @@ export function createApp(store: Store, locations: Location[], collector: Collec
           num(p, "threshold", 6),
         );
         return sendJson(res, 200, swings);
+      }
+      case "/api/forecast": {
+        const loc = location(p);
+        const field = p.get("field") === "msl" ? "mslPressure" : "surfacePressure";
+        let rows: Reading[];
+        try {
+          rows = await forecasts.get(loc);
+        } catch (err) {
+          throw new HttpError(502, `forecast unavailable: ${err instanceof Error ? err.message : err}`);
+        }
+        return sendJson(res, 200, forecastResponse(store, loc, rows, field, num(p, "window", 12), num(p, "threshold", 6)));
       }
     }
 

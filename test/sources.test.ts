@@ -15,7 +15,7 @@ test("parseOpenMeteo drops future hours and empty rows", () => {
       precipitation_probability: [5, null, 40, 10],
     },
   };
-  const rows = parseOpenMeteo(json, 7200);
+  const rows = parseOpenMeteo(json, (ts) => ts <= 7200);
   assert.deepEqual(rows.map((r) => r.ts), [0, 7200]);
   assert.deepEqual(rows[1], {
     ts: 7200, surfacePressure: 1001, mslPressure: 1014, temperature: 11, precipitation: 0.4, precipProbability: 40,
@@ -23,7 +23,7 @@ test("parseOpenMeteo drops future hours and empty rows", () => {
 });
 
 test("parseOpenMeteo tolerates a missing variable (archive has no probability)", () => {
-  const rows = parseOpenMeteo({ hourly: { time: [0], surface_pressure: [990], pressure_msl: [1010] } }, 10);
+  const rows = parseOpenMeteo({ hourly: { time: [0], surface_pressure: [990], pressure_msl: [1010] } }, () => true);
   assert.equal(rows[0]?.precipProbability, null);
 });
 

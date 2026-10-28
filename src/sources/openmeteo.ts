@@ -22,13 +22,13 @@ interface OpenMeteoResponse {
   };
 }
 
-/** Turn an Open-Meteo hourly response (timeformat=unixtime) into readings at or before `now`. */
-export function parseOpenMeteo(json: unknown, now: number): Reading[] {
+/** Turn an Open-Meteo hourly response (timeformat=unixtime) into readings whose time passes `keep`. */
+export function parseOpenMeteo(json: unknown, keep: (ts: number) => boolean): Reading[] {
   const h = (json as OpenMeteoResponse).hourly;
   const times = h?.time ?? [];
   const out: Reading[] = [];
   times.forEach((ts, i) => {
-    if (ts > now) return;
+    if (!keep(ts)) return;
     const r: Reading = {
       ts,
       surfacePressure: h?.surface_pressure?.[i] ?? null,
@@ -57,7 +57,18 @@ export async function fetchRecent(loc: Location, pastDays: number, now: number):
   const params = baseParams(loc, FORECAST_VARS);
   params.set("past_days", String(Math.min(Math.max(pastDays, 1), MAX_PAST_DAYS)));
   params.set("forecast_days", "1");
-  return parseOpenMeteo(await getJson(`${FORECAST_URL}?${params}`), now);
+  return parseOpenMeteo(await getJson(`${FORECAST_URL}?${params}`), (ts) => ts <= now);
+}
+
+/** Open-Meteo's forecast endpoint goes out at most 16 days. */
+export const MAX_FORECAST_DAYS = 16;
+
+/** Hours after `now`, out to `days` days. */
+export async function fetchForecast(loc: Location, days: number, now: number): Promise<Reading[]> {
+  const params = baseParams(loc, FORECAST_VARS);
+  params.set("forecast_days", String(Math.min(Math.max(days, 1), MAX_FORECAST_DAYS) + 1));
+  const end = now + days * 86_400;
+  return parseOpenMeteo(await getJson(`${FORECAST_URL}?${params}`), (ts) => ts > now && ts <= end);
 }
 
 /** Dates are YYYY-MM-DD (UTC), inclusive. */
@@ -65,5 +76,5 @@ export async function fetchArchive(loc: Location, startDate: string, endDate: st
   const params = baseParams(loc, ARCHIVE_VARS);
   params.set("start_date", startDate);
   params.set("end_date", endDate);
-  return parseOpenMeteo(await getJson(`${ARCHIVE_URL}?${params}`), now);
+  return parseOpenMeteo(await getJson(`${ARCHIVE_URL}?${params}`), (ts) => ts <= now);
 }
