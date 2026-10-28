@@ -428,10 +428,54 @@ async function deleteEvent(ev) {
   }
 }
 
-/** "YYYY-MM-DDTHH:MM" in the browser's zone, for datetime-local inputs. */
-function localInputValue(date) {
-  const d = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return d.toISOString().slice(0, 16);
+/** The zone times are shown in: the location's, else the browser's. */
+const displayZone = () => currentLocation()?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+function zoneParts(ms, tz) {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+  return Object.fromEntries(fmt.formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+}
+
+/** Unix ms -> "YYYY-MM-DDTHH:MM" wall-clock time in the display zone, for datetime-local inputs. */
+function toInputValue(ms) {
+  const p = zoneParts(ms, displayZone());
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
+/** Inverse of toInputValue: wall-clock time in the display zone -> unix ms. */
+function fromInputValue(value) {
+  const tz = displayZone();
+  const [y, mo, d, h, mi] = value.split(/[-T:]/).map(Number);
+  const wall = Date.UTC(y, mo - 1, d, h, mi);
+  const offset = (ms) => {
+    const p = zoneParts(ms, tz);
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) - Math.floor(ms / 60000) * 60000;
+  };
+  // Second pass settles times next to a DST change.
+  return wall - offset(wall - offset(wall));
+}
+
+let editing = null; // the event the dialog is editing, or null when logging a new one
+let initialWhen = "";
+
+/** Open the log dialog, either for a new event of `kind` or to edit an existing event. */
+function openLogDialog({ kind, event = null }) {
+  const dialog = $("log-dialog");
+  const when = $("log-when");
+  editing = event;
+  $("log-form").reset();
+  $("log-title").textContent = event ? "Edit entry" : "Log";
+  dialog.querySelector(`input[value="${event?.kind ?? kind}"]`).checked = true;
+  const now = new Date();
+  when.value = toInputValue(event ? event.ts * 1000 : now.getTime());
+  when.max = toInputValue(now.getTime());
+  const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  $("log-zone").textContent = displayZone() === browserZone ? "" : `${currentLocation()?.name ?? ""} time`;
+  initialWhen = when.value;
+  $("log-note").value = event?.note ?? "";
+  dialog.showModal();
 }
 
 function setupLog() {
@@ -442,24 +486,39 @@ function setupLog() {
       btn.disabled = false;
     });
   }
-  const dialog = $("log-dialog");
-  const when = $("log-when");
   for (const btn of document.querySelectorAll(".log-more")) {
-    btn.addEventListener("click", () => {
-      $("log-form").reset();
-      dialog.querySelector(`input[value="${btn.dataset.kind}"]`).checked = true;
-      const now = new Date();
-      when.value = localInputValue(now);
-      when.max = localInputValue(now);
-      dialog.showModal();
-    });
+    btn.addEventListener("click", () => openLogDialog({ kind: btn.dataset.kind }));
   }
+  const dialog = $("log-dialog");
   dialog.addEventListener("close", () => {
     if (dialog.returnValue !== "save") return;
     const kind = dialog.querySelector('input[name="kind"]:checked').value;
-    const ts = Math.floor(new Date(when.value).getTime() / 1000);
-    logEvent(kind, ts, $("log-note").value);
+    const whenValue = $("log-when").value;
+    const note = $("log-note").value;
+    if (!editing) return logEvent(kind, Math.floor(fromInputValue(whenValue) / 1000), note);
+    // The input only has minute precision; keep the stored time unless it was changed.
+    const ts = whenValue === initialWhen ? editing.ts : Math.floor(fromInputValue(whenValue) / 1000);
+    updateEvent(editing, { kind, ts, note });
   });
+}
+
+async function updateEvent(ev, changes) {
+  const patch = (body) =>
+    getJson(`/api/events/${ev.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  try {
+    await patch(changes);
+    await reloadEvents();
+    toast(`${EVENT_NAMES[changes.kind]} updated`, async () => {
+      await patch({ kind: ev.kind, ts: ev.ts, note: ev.note ?? "" });
+      await reloadEvents();
+    });
+  } catch (err) {
+    toast(`Couldn't save: ${err.message}`);
+  }
 }
 
 function renderEvents() {
@@ -485,15 +544,20 @@ function renderEvents() {
       tr.append(td);
     });
     const td = document.createElement("td");
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "row-delete";
-    del.textContent = "Delete";
-    del.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteEvent(ev);
-    });
-    td.append(del);
+    td.className = "row-actions";
+    const action = (label, onClick) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "row-delete";
+      btn.textContent = label;
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onClick();
+      });
+      td.append(btn);
+    };
+    action("Edit", () => openLogDialog({ event: ev }));
+    action("Delete", () => deleteEvent(ev));
     tr.append(td);
     tr.addEventListener("click", () => zoomTo(ev.ts - 36 * HOUR, ev.ts + 12 * HOUR));
     body.append(tr);

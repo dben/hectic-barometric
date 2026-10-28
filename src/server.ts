@@ -55,6 +55,26 @@ async function readJson(req: IncomingMessage, limit = 4096): Promise<Record<stri
   throw new HttpError(400, "body must be a JSON object");
 }
 
+/** Validate the optional event fields in a request body. Absent fields stay undefined. */
+function eventFields(body: Record<string, unknown>): { kind?: EventKind; ts?: number; note?: string | null } {
+  const out: { kind?: EventKind; ts?: number; note?: string | null } = {};
+  if (body.kind !== undefined) {
+    const kind = String(body.kind) as EventKind;
+    if (!EVENT_KINDS.includes(kind)) throw new HttpError(400, `kind must be one of ${EVENT_KINDS.join(", ")}`);
+    out.kind = kind;
+  }
+  if (body.ts !== undefined && body.ts !== null) {
+    const ts = Number(body.ts);
+    if (!Number.isInteger(ts) || ts < 0) throw new HttpError(400, "ts must be unix seconds");
+    if (ts > Math.floor(Date.now() / 1000) + 3600) throw new HttpError(400, "ts can't be in the future");
+    out.ts = ts;
+  }
+  if (body.note !== undefined) {
+    out.note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
+  }
+  return out;
+}
+
 function num(params: URLSearchParams, name: string, fallback: number): number {
   const raw = params.get(name);
   if (raw === null || raw === "") return fallback;
@@ -147,16 +167,17 @@ export function createApp(store: Store, locations: Location[], collector: Collec
       const body = await readJson(req);
       const loc = byId.get(String(body.location ?? ""));
       if (!loc) throw new HttpError(404, "unknown location");
-      const kind = String(body.kind ?? "") as EventKind;
-      if (!EVENT_KINDS.includes(kind)) throw new HttpError(400, `kind must be one of ${EVENT_KINDS.join(", ")}`);
-      const now = Math.floor(Date.now() / 1000);
-      const ts = body.ts === undefined || body.ts === null ? now : Number(body.ts);
-      if (!Number.isInteger(ts) || ts < 0) throw new HttpError(400, "ts must be unix seconds");
-      if (ts > now + 3600) throw new HttpError(400, "ts can't be in the future");
-      const note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
-      return sendJson(res, 201, store.addEvent(loc.id, kind, ts, note));
+      const fields = eventFields(body);
+      if (!fields.kind) throw new HttpError(400, `kind must be one of ${EVENT_KINDS.join(", ")}`);
+      const ts = fields.ts ?? Math.floor(Date.now() / 1000);
+      return sendJson(res, 201, store.addEvent(loc.id, fields.kind, ts, fields.note ?? null));
     }
     const eventId = /^\/api\/events\/(\d+)$/.exec(url.pathname)?.[1];
+    if (eventId && req.method === "PATCH") {
+      const updated = store.updateEvent(Number(eventId), eventFields(await readJson(req)));
+      if (!updated) throw new HttpError(404, "no such event");
+      return sendJson(res, 200, updated);
+    }
     if (eventId && req.method === "DELETE") {
       if (!store.deleteEvent(Number(eventId))) throw new HttpError(404, "no such event");
       res.writeHead(204).end();

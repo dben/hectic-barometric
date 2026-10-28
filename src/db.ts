@@ -133,6 +133,29 @@ export class Store {
     }));
   }
 
+  /** Apply the given changes; returns the updated event, or null if it doesn't exist. */
+  updateEvent(id: number, changes: { kind?: EventKind; ts?: number; note?: string | null }): LoggedEvent | null {
+    const sets: string[] = [];
+    const values: (string | number | null)[] = [];
+    for (const key of ["kind", "ts", "note"] as const) {
+      if (changes[key] === undefined) continue;
+      sets.push(`${key} = ?`);
+      values.push(changes[key]);
+    }
+    if (sets.length) this.db.prepare(`UPDATE events SET ${sets.join(", ")} WHERE id = ?`).run(...values, id);
+    const row = this.db.prepare("SELECT id, location_id, kind, ts, note FROM events WHERE id = ?").get(id) as
+      | Row
+      | undefined;
+    if (!row) return null;
+    return {
+      id: row.id as number,
+      locationId: row.location_id as string,
+      kind: row.kind as EventKind,
+      ts: row.ts as number,
+      note: row.note as string | null,
+    };
+  }
+
   deleteEvent(id: number): boolean {
     return Number(this.db.prepare("DELETE FROM events WHERE id = ?").run(id).changes) > 0;
   }

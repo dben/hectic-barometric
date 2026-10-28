@@ -46,6 +46,18 @@ test("log, list with pressure context, and delete an event", async () => {
   assert.equal(list[0]?.pressure, 1007);
   assert.equal(list[0]?.change24h, -8);
 
+  const patch = (body: unknown) =>
+    fetch(`${base}/api/events/${event.id}`, { method: "PATCH", body: JSON.stringify(body) });
+  const edited = await patch({ note: "both sides" });
+  assert.equal(edited.status, 200);
+  assert.deepEqual(await edited.json(), { ...event, note: "both sides" });
+  const retimed = (await (await patch({ kind: "pre-migraine", ts: now - 3 * H })).json()) as Record<string, unknown>;
+  assert.deepEqual([retimed.kind, retimed.ts, retimed.note], ["pre-migraine", now - 3 * H, "both sides"]);
+  assert.equal(((await (await patch({ note: "   " })).json()) as { note: unknown }).note, null);
+  assert.equal((await patch({ kind: "headache" })).status, 400);
+  assert.equal((await patch({ ts: now + 86400 })).status, 400);
+  assert.equal((await fetch(`${base}/api/events/999`, { method: "PATCH", body: "{}" })).status, 404);
+
   assert.equal((await fetch(`${base}/api/events/${event.id}`, { method: "DELETE" })).status, 204);
   assert.equal((await fetch(`${base}/api/events/${event.id}`, { method: "DELETE" })).status, 404);
 });

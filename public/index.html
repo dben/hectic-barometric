@@ -39,7 +39,7 @@
         <label><input type="radio" name="kind" value="pre-migraine"> Pre-migraine</label>
         <label><input type="radio" name="kind" value="migraine"> Migraine</label>
       </div>
-      <label class="stack">When <input type="datetime-local" id="log-when" required></label>
+      <label class="stack"><span>When <span class="muted" id="log-zone"></span></span><input type="datetime-local" id="log-when" required></label>
       <label class="stack">Note <input type="text" id="log-note" maxlength="500" placeholder="Optional"></label>
       <div class="actions">
         <button type="submit" value="cancel" formnovalidate>Cancel</button>
@@ -144,7 +144,7 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>When</th><th>Type</th><th class="num">Pressure</th><th class="num">24 h change</th><th>Note</th><th><span class="sr-only">Delete</span></th></tr>
+            <tr><th>When</th><th>Type</th><th class="num">Pressure</th><th class="num">24 h change</th><th>Note</th><th><span class="sr-only">Actions</span></th></tr>
           </thead>
           <tbody id="event-rows"></tbody>
         </table>
