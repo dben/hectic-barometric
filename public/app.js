@@ -3,6 +3,7 @@
 const HOUR = 3600;
 const SOURCE_NAMES = { "open-meteo": "Open-Meteo", nws: "NWS" };
 const SOURCE_COLOR = { "open-meteo": "--series-1", nws: "--series-2" };
+const EVENT_NAMES = { "pre-migraine": "Pre-migraine", migraine: "Migraine" };
 
 const UNITS = {
   metric: {
@@ -52,6 +53,7 @@ let data = null; // { ts, series }
 let swings = [];
 let forecast = null; // { ts, series, swings } from /api/forecast, or null
 let forecastError = null;
+let events = []; // logged migraines in the visible range
 let charts = [];
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -75,10 +77,13 @@ function fmtTime(ts, withYear = false) {
   });
 }
 
-async function getJson(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: ${res.status}`);
-  return res.json();
+async function getJson(url, init) {
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `${url}: ${res.status}`);
+  }
+  return res.status === 204 ? null : res.json();
 }
 
 // ---------- controls ----------
@@ -171,11 +176,27 @@ async function refresh() {
   if (!state.location) return;
   const { from, to } = rangeParams();
   const q = `location=${encodeURIComponent(state.location)}&from=${from}&to=${to}`;
-  const [series, sw, fc] = await Promise.all([getJson(`/api/series?${q}`), fetchSwings(from, to), fetchForecast()]);
+  const [series, sw, fc, ev] = await Promise.all([
+    getJson(`/api/series?${q}`),
+    fetchSwings(from, to),
+    fetchForecast(),
+    fetchEvents(from),
+  ]);
   data = series;
   swings = sw;
   forecast = fc;
+  events = ev;
   render();
+}
+
+function fetchEvents(from) {
+  const q = new URLSearchParams({
+    location: state.location,
+    from,
+    to: Math.floor(Date.now() / 1000) + 3600,
+    field: state.field,
+  });
+  return getJson(`/api/events?${q}`);
 }
 
 /** Forecast for the next `state.forecastDays`; never throws, so history still renders without it. */
@@ -218,7 +239,7 @@ function fetchSwings(from, to) {
 
 async function refreshSwings() {
   if (!data) return;
-  [swings, forecast] = await Promise.all([fetchSwings(data.from, data.to), fetchForecast()]);
+  [swings, forecast, events] = await Promise.all([fetchSwings(data.from, data.to), fetchForecast(), fetchEvents(data.from)]);
   render();
 }
 
@@ -244,6 +265,7 @@ function render() {
   renderUpcoming();
   renderTiles();
   renderSwingTable();
+  renderEvents();
   renderCharts();
 }
 
@@ -353,6 +375,161 @@ function renderSwingTable() {
     tr.addEventListener("click", () => zoomTo(s.start - 12 * HOUR, s.end + 12 * HOUR));
     body.append(tr);
   }
+}
+
+// ---------- migraine log ----------
+
+let toastTimer;
+function toast(text, undo) {
+  const el = $("toast");
+  $("toast-text").textContent = text;
+  const btn = $("toast-undo");
+  btn.hidden = !undo;
+  btn.onclick = async () => {
+    el.hidden = true;
+    await undo();
+  };
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.hidden = true), 8000);
+}
+
+async function reloadEvents() {
+  if (!data) return;
+  events = await fetchEvents(data.from);
+  renderEvents();
+  for (const c of charts) c.redraw(false);
+}
+
+async function logEvent(kind, ts, note) {
+  try {
+    const ev = await getJson("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ location: state.location, kind, ts, note }),
+    });
+    await reloadEvents();
+    toast(`${EVENT_NAMES[kind]} logged · ${fmtTime(ev.ts)}`, async () => {
+      await getJson(`/api/events/${ev.id}`, { method: "DELETE" });
+      await reloadEvents();
+    });
+  } catch (err) {
+    toast(`Couldn't log: ${err.message}`);
+  }
+}
+
+async function deleteEvent(ev) {
+  try {
+    await getJson(`/api/events/${ev.id}`, { method: "DELETE" });
+    await reloadEvents();
+    toast(`${EVENT_NAMES[ev.kind]} deleted`, () => logEvent(ev.kind, ev.ts, ev.note));
+  } catch (err) {
+    toast(`Couldn't delete: ${err.message}`);
+  }
+}
+
+/** "YYYY-MM-DDTHH:MM" in the browser's zone, for datetime-local inputs. */
+function localInputValue(date) {
+  const d = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 16);
+}
+
+function setupLog() {
+  for (const btn of document.querySelectorAll(".log-now")) {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      await logEvent(btn.dataset.kind, Math.floor(Date.now() / 1000), null);
+      btn.disabled = false;
+    });
+  }
+  const dialog = $("log-dialog");
+  const when = $("log-when");
+  for (const btn of document.querySelectorAll(".log-more")) {
+    btn.addEventListener("click", () => {
+      $("log-form").reset();
+      dialog.querySelector(`input[value="${btn.dataset.kind}"]`).checked = true;
+      const now = new Date();
+      when.value = localInputValue(now);
+      when.max = localInputValue(now);
+      dialog.showModal();
+    });
+  }
+  dialog.addEventListener("close", () => {
+    if (dialog.returnValue !== "save") return;
+    const kind = dialog.querySelector('input[name="kind"]:checked').value;
+    const ts = Math.floor(new Date(when.value).getTime() / 1000);
+    logEvent(kind, ts, $("log-note").value);
+  });
+}
+
+function renderEvents() {
+  const p = units().pressure;
+  const body = $("event-rows");
+  body.innerHTML = "";
+  $("event-count").textContent = events.length ? `${events.length} in this range` : "none in this range";
+  for (const ev of [...events].reverse()) {
+    const tr = document.createElement("tr");
+    const cells = [
+      fmtTime(ev.ts, state.days > 300),
+      EVENT_NAMES[ev.kind],
+      ev.pressure == null ? "–" : `${fmt(p.conv(ev.pressure), p.digits)} ${p.label}`,
+      ev.change24h == null ? "–" : `${ev.change24h > 0 ? "▲ +" : ev.change24h < 0 ? "▼ " : ""}${fmt(p.conv(ev.change24h), p.digits)}`,
+      ev.note ?? "",
+    ];
+    cells.forEach((text, i) => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      if (i === 2 || i === 3) td.className = "num";
+      if (i === 3 && ev.change24h) td.classList.add(ev.change24h < 0 ? "dir-fall" : "dir-rise");
+      if (i === 4) td.className = "note";
+      tr.append(td);
+    });
+    const td = document.createElement("td");
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "row-delete";
+    del.textContent = "Delete";
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteEvent(ev);
+    });
+    td.append(del);
+    tr.append(td);
+    tr.addEventListener("click", () => zoomTo(ev.ts - 36 * HOUR, ev.ts + 12 * HOUR));
+    body.append(tr);
+  }
+}
+
+/** uPlot plugin: a vertical line per logged event, solid for migraine, dashed for pre-migraine. */
+function eventMarks({ labels }) {
+  return {
+    hooks: {
+      draw: (u) => {
+        const { ctx, bbox } = u;
+        const dpr = devicePixelRatio;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height);
+        ctx.clip();
+        ctx.strokeStyle = ctx.fillStyle = css("--event");
+        ctx.lineWidth = 2 * dpr;
+        ctx.font = `600 ${11 * dpr}px system-ui, sans-serif`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        for (const ev of events) {
+          const x = Math.round(u.valToPos(ev.ts, "x", true));
+          if (x < bbox.left || x > bbox.left + bbox.width) continue;
+          ctx.setLineDash(ev.kind === "migraine" ? [] : [4 * dpr, 3 * dpr]);
+          ctx.beginPath();
+          ctx.moveTo(x, bbox.top);
+          ctx.lineTo(x, bbox.top + bbox.height);
+          ctx.stroke();
+          if (labels) ctx.fillText(ev.kind === "migraine" ? "M" : "Pre", x + 3 * dpr, bbox.top + 18 * dpr);
+        }
+        ctx.restore();
+      },
+    },
+  };
 }
 
 function zoomTo(min, max) {
@@ -521,7 +698,7 @@ function renderCharts() {
 
   $("pressure-caption").textContent = state.field === "msl" ? "sea level" : "surface";
 
-  const add = (el, height, [series, cols], yAxis, plugins = [bands({ showSwings: false })]) =>
+  const add = (el, height, [series, cols], yAxis, plugins = [bands({ showSwings: false }), eventMarks({ labels: false })]) =>
     charts.push(makeChart(el, height, series, [xs, ...cols], { yAxis, plugins }));
 
   add(
@@ -533,7 +710,7 @@ function renderCharts() {
       fieldKey(), u.pressure.conv, u.pressure.digits, u.pressure.label,
     ),
     axis(u.pressure.label, u.pressure.digits),
-    [bands({ showSwings: true })],
+    [bands({ showSwings: true }), eventMarks({ labels: true })],
   );
   add(
     $("chart-temp"),
@@ -580,6 +757,7 @@ function resizeCharts() {
 async function main() {
   locations = await getJson("/api/locations");
   setupControls();
+  setupLog();
   await Promise.all([refresh(), refreshStatus()]);
   new ResizeObserver(resizeCharts).observe(document.querySelector(".charts"));
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderCharts);

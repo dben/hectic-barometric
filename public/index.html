@@ -16,7 +16,42 @@
       <select id="location"></select>
     </label>
     <span id="status" class="muted"></span>
+    <div class="log-actions" role="group" aria-label="Log">
+      <div class="split">
+        <button type="button" class="log-now" data-kind="pre-migraine">Pre-migraine</button>
+        <button type="button" class="log-more" data-kind="pre-migraine" aria-haspopup="dialog" aria-label="Pre-migraine: set time or add a note">
+          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="split">
+        <button type="button" class="log-now" data-kind="migraine">Migraine</button>
+        <button type="button" class="log-more" data-kind="migraine" aria-haspopup="dialog" aria-label="Migraine: set time or add a note">
+          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
   </header>
+
+  <dialog id="log-dialog" aria-labelledby="log-title">
+    <form method="dialog" id="log-form">
+      <h2 id="log-title">Log</h2>
+      <div class="seg" role="radiogroup" aria-label="Type">
+        <label><input type="radio" name="kind" value="pre-migraine"> Pre-migraine</label>
+        <label><input type="radio" name="kind" value="migraine"> Migraine</label>
+      </div>
+      <label class="stack">When <input type="datetime-local" id="log-when" required></label>
+      <label class="stack">Note <input type="text" id="log-note" maxlength="500" placeholder="Optional"></label>
+      <div class="actions">
+        <button type="submit" value="cancel" formnovalidate>Cancel</button>
+        <button type="submit" value="save" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden>
+    <span id="toast-text"></span>
+    <button type="button" id="toast-undo">Undo</button>
+  </div>
 
   <main>
     <section class="controls" aria-label="Filters">
@@ -59,6 +94,8 @@
       </select>
       <span class="legend-chip"><i class="band band-fall"></i>Falling</span>
       <span class="legend-chip"><i class="band band-rise"></i>Rising</span>
+      <span class="legend-chip"><i class="mark mark-migraine"></i>Migraine</span>
+      <span class="legend-chip"><i class="mark mark-pre-migraine"></i>Pre-migraine</span>
     </section>
 
     <section class="upcoming" id="upcoming" aria-label="Forecast swings" hidden>
@@ -98,6 +135,18 @@
             <tr><th>Start</th><th>End</th><th class="num">Hours</th><th class="num">Change</th><th class="num">Peak rate</th></tr>
           </thead>
           <tbody id="swing-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="swings">
+      <h2>Migraine log <span class="muted" id="event-count"></span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>When</th><th>Type</th><th class="num">Pressure</th><th class="num">24 h change</th><th>Note</th><th><span class="sr-only">Delete</span></th></tr>
+          </thead>
+          <tbody id="event-rows"></tbody>
         </table>
       </div>
     </section>

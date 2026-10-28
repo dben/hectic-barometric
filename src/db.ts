@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { Reading, Source } from "./types.js";
+import type { EventKind, LoggedEvent, Reading, Source } from "./types.js";
 
 type Row = Record<string, number | string | null>;
 
@@ -25,6 +25,15 @@ export class Store {
         precip_probability REAL,
         PRIMARY KEY (location_id, source, ts)
       ) WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS events (
+        id          INTEGER PRIMARY KEY,
+        location_id TEXT    NOT NULL,
+        kind        TEXT    NOT NULL,
+        ts          INTEGER NOT NULL,
+        note        TEXT,
+        created_at  INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS events_by_time ON events (location_id, ts);
     `);
   }
 
@@ -101,6 +110,31 @@ export class Store {
   prune(olderThan: number): number {
     const res = this.db.prepare("DELETE FROM readings WHERE ts < ?").run(olderThan);
     return Number(res.changes);
+  }
+
+  addEvent(locationId: string, kind: EventKind, ts: number, note: string | null): LoggedEvent {
+    const res = this.db
+      .prepare("INSERT INTO events (location_id, kind, ts, note, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(locationId, kind, ts, note, Math.floor(Date.now() / 1000));
+    return { id: Number(res.lastInsertRowid), locationId, kind, ts, note };
+  }
+
+  events(locationId: string, from: number, to: number): LoggedEvent[] {
+    const rows = this.db
+      .prepare(`SELECT id, location_id, kind, ts, note FROM events
+                WHERE location_id = ? AND ts >= ? AND ts <= ? ORDER BY ts`)
+      .all(locationId, from, to) as Row[];
+    return rows.map((r) => ({
+      id: r.id as number,
+      locationId: r.location_id as string,
+      kind: r.kind as EventKind,
+      ts: r.ts as number,
+      note: r.note as string | null,
+    }));
+  }
+
+  deleteEvent(id: number): boolean {
+    return Number(this.db.prepare("DELETE FROM events WHERE id = ?").run(id).changes) > 0;
   }
 
   close(): void {

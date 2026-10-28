@@ -20,3 +20,15 @@ export interface Location {
   timezone?: string;
   nwsStation?: string;
 }
+
+export const EVENT_KINDS = ["pre-migraine", "migraine"] as const;
+export type EventKind = (typeof EVENT_KINDS)[number];
+
+/** Something the user logged, e.g. the start of a migraine. Not pruned with readings. */
+export interface LoggedEvent {
+  id: number;
+  locationId: string;
+  kind: EventKind;
+  ts: number; // unix seconds
+  note: string | null;
+}

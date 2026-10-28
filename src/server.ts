@@ -6,7 +6,7 @@ import type { Collector } from "./collector.js";
 import type { Store } from "./db.js";
 import type { ForecastCache } from "./forecast.js";
 import { findSwings } from "./swings.js";
-import { SOURCES, type Location, type Reading, type Source } from "./types.js";
+import { EVENT_KINDS, SOURCES, type EventKind, type Location, type LoggedEvent, type Reading, type Source } from "./types.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PUBLIC_DIR = join(ROOT, "public");
@@ -38,6 +38,21 @@ async function sendFile(res: ServerResponse, path: string): Promise<void> {
   if (!body) throw new HttpError(404, "not found");
   res.writeHead(200, { "Content-Type": MIME[extname(path)] ?? "application/octet-stream" });
   res.end(body);
+}
+
+async function readJson(req: IncomingMessage, limit = 4096): Promise<Record<string, unknown>> {
+  let body = "";
+  for await (const chunk of req) {
+    body += chunk;
+    if (body.length > limit) throw new HttpError(413, "body too large");
+  }
+  try {
+    const parsed: unknown = JSON.parse(body || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+  } catch {
+    /* fall through */
+  }
+  throw new HttpError(400, "body must be a JSON object");
 }
 
 function num(params: URLSearchParams, name: string, fallback: number): number {
@@ -89,6 +104,24 @@ export function forecastResponse(
   return { ts: future.map((r) => r.ts), series, swings };
 }
 
+/** Each event with the Open-Meteo pressure at that hour and its change over the 24 h before. */
+export function eventsWithPressure(
+  store: Store,
+  locationId: string,
+  events: LoggedEvent[],
+  field: "surfacePressure" | "mslPressure",
+) {
+  return events.map((e) => {
+    const hour = Math.round(e.ts / 3600) * 3600;
+    const rows = store.read(locationId, "open-meteo", hour - 86_400, hour);
+    const at = (t: number) => rows.find((r) => r.ts === t)?.[field] ?? null;
+    const pressure = at(hour);
+    const before = at(hour - 86_400);
+    const change24h = pressure !== null && before !== null ? Math.round((pressure - before) * 100) / 100 : null;
+    return { id: e.id, kind: e.kind, ts: e.ts, note: e.note, pressure, change24h };
+  });
+}
+
 export function createApp(store: Store, locations: Location[], collector: Collector, forecasts: ForecastCache) {
   const byId = new Map(locations.map((l) => [l.id, l]));
 
@@ -109,6 +142,26 @@ export function createApp(store: Store, locations: Location[], collector: Collec
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", "http://localhost");
     const p = url.searchParams;
+
+    if (url.pathname === "/api/events" && req.method === "POST") {
+      const body = await readJson(req);
+      const loc = byId.get(String(body.location ?? ""));
+      if (!loc) throw new HttpError(404, "unknown location");
+      const kind = String(body.kind ?? "") as EventKind;
+      if (!EVENT_KINDS.includes(kind)) throw new HttpError(400, `kind must be one of ${EVENT_KINDS.join(", ")}`);
+      const now = Math.floor(Date.now() / 1000);
+      const ts = body.ts === undefined || body.ts === null ? now : Number(body.ts);
+      if (!Number.isInteger(ts) || ts < 0) throw new HttpError(400, "ts must be unix seconds");
+      if (ts > now + 3600) throw new HttpError(400, "ts can't be in the future");
+      const note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
+      return sendJson(res, 201, store.addEvent(loc.id, kind, ts, note));
+    }
+    const eventId = /^\/api\/events\/(\d+)$/.exec(url.pathname)?.[1];
+    if (eventId && req.method === "DELETE") {
+      if (!store.deleteEvent(Number(eventId))) throw new HttpError(404, "no such event");
+      res.writeHead(204).end();
+      return;
+    }
     if (req.method !== "GET" && req.method !== "HEAD") throw new HttpError(405, "method not allowed");
 
     switch (url.pathname) {
@@ -139,6 +192,12 @@ export function createApp(store: Store, locations: Location[], collector: Collec
           num(p, "threshold", 6),
         );
         return sendJson(res, 200, swings);
+      }
+      case "/api/events": {
+        const loc = location(p);
+        const [from, to] = range(p);
+        const field = p.get("field") === "msl" ? "mslPressure" : "surfacePressure";
+        return sendJson(res, 200, eventsWithPressure(store, loc.id, store.events(loc.id, from, to), field));
       }
       case "/api/forecast": {
         const loc = location(p);

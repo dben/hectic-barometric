@@ -61,6 +61,14 @@ The dashboard can extend each chart up to 7 days ahead with Open-Meteo's hourly 
 
 Forecasts aren't stored. The server fetches one per location when the dashboard asks and caches it in memory for 30 minutes.
 
+## Migraine log
+
+**Pre-migraine** and **Migraine** in the header log an event at the current time for the selected location. The arrow next to each opens a dialog to set a different date and time (in your device's time zone) or add a note. Events show as vertical lines on every chart (solid for migraine, dashed for pre-migraine) and in the log table, along with the Open-Meteo pressure at that hour and its change over the previous 24 h.
+
+Events are kept indefinitely. `RETENTION_DAYS` only prunes weather readings, so events older than the stored weather show no pressure.
+
+The dashboard has no login. Anyone who can reach the port can add or delete events, so keep it on a private network or behind a reverse proxy with auth.
+
 ## Settings
 
 | Variable | Default (in the image) | |
@@ -82,6 +90,9 @@ Forecasts aren't stored. The server fetches one per location when the dashboard 
 | `GET /api/series?location=&from=&to=` | Hourly readings for both sources on shared timestamps (unix seconds) |
 | `GET /api/swings?location=&from=&to=&source=open-meteo\|nws&field=surface\|msl&window=12&threshold=6` | Detected swings; threshold in hPa |
 | `GET /api/forecast?location=&field=surface\|msl&window=12&threshold=6` | Forecast hours (not stored) and upcoming swings |
+| `GET /api/events?location=&from=&to=&field=surface\|msl` | Logged events with pressure context |
+| `POST /api/events` | Body: `{"location", "kind": "pre-migraine"\|"migraine", "ts"?, "note"?}`; `ts` defaults to now |
+| `DELETE /api/events/{id}` | |
 | `GET /api/status` | Last collection run, errors, row counts |
 | `GET /healthz` | Liveness |
 
