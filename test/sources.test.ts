@@ -11,6 +11,7 @@ test("parseOpenMeteo drops future hours and empty rows", () => {
       surface_pressure: [1000, null, 1001, 1002],
       pressure_msl: [1013, null, 1014, 1015],
       temperature_2m: [10, null, 11, 12],
+      relative_humidity_2m: [80, null, 75, 70],
       precipitation: [0, null, 0.4, 0],
       precipitation_probability: [5, null, 40, 10],
     },
@@ -18,7 +19,7 @@ test("parseOpenMeteo drops future hours and empty rows", () => {
   const rows = parseOpenMeteo(json, (ts) => ts <= 7200);
   assert.deepEqual(rows.map((r) => r.ts), [0, 7200]);
   assert.deepEqual(rows[1], {
-    ts: 7200, surfacePressure: 1001, mslPressure: 1014, temperature: 11, precipitation: 0.4, precipProbability: 40,
+    ts: 7200, surfacePressure: 1001, mslPressure: 1014, temperature: 11, humidity: 75, precipitation: 0.4, precipProbability: 40,
   });
 });
 
@@ -40,6 +41,7 @@ const obs = (timestamp: string, altPa: number | null, extra: Record<string, unkn
     barometricPressure: { value: altPa },
     seaLevelPressure: { value: null },
     temperature: { value: 6 },
+    relativeHumidity: { value: 81.234 },
     ...extra,
   },
 });
@@ -54,6 +56,7 @@ test("parseObservations keeps one reading per hour, preferring the METAR", () =>
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.ts, Date.parse("2026-10-26T10:00:00Z") / 1000);
   assert.equal(rows[0]?.mslPressure, 1029.2);
+  assert.equal(rows[0]?.humidity, 81.2);
   assert.ok(rows[0]!.surfacePressure! > 1012 && rows[0]!.surfacePressure! < 1014);
 });
 

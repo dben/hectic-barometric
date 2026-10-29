@@ -21,6 +21,7 @@ export class Store {
         surface_pressure   REAL,
         msl_pressure       REAL,
         temperature        REAL,
+        humidity           REAL,
         precipitation      REAL,
         precip_probability REAL,
         PRIMARY KEY (location_id, source, ts)
@@ -35,6 +36,9 @@ export class Store {
       );
       CREATE INDEX IF NOT EXISTS events_by_time ON events (location_id, ts);
     `);
+    // Databases created before humidity was tracked.
+    const columns = this.db.prepare("PRAGMA table_info(readings)").all() as Row[];
+    if (!columns.some((c) => c.name === "humidity")) this.db.exec("ALTER TABLE readings ADD COLUMN humidity REAL");
   }
 
   /**
@@ -44,12 +48,13 @@ export class Store {
   upsert(locationId: string, source: Source, readings: Reading[]): number {
     const stmt = this.db.prepare(`
       INSERT INTO readings (location_id, source, ts, surface_pressure, msl_pressure,
-                            temperature, precipitation, precip_probability)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            temperature, humidity, precipitation, precip_probability)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (location_id, source, ts) DO UPDATE SET
         surface_pressure   = COALESCE(excluded.surface_pressure,   readings.surface_pressure),
         msl_pressure       = COALESCE(excluded.msl_pressure,       readings.msl_pressure),
         temperature        = COALESCE(excluded.temperature,        readings.temperature),
+        humidity           = COALESCE(excluded.humidity,           readings.humidity),
         precipitation      = COALESCE(excluded.precipitation,      readings.precipitation),
         precip_probability = COALESCE(excluded.precip_probability, readings.precip_probability)
     `);
@@ -57,7 +62,7 @@ export class Store {
     try {
       for (const r of readings) {
         stmt.run(locationId, source, r.ts, r.surfacePressure, r.mslPressure,
-          r.temperature, r.precipitation, r.precipProbability);
+          r.temperature, r.humidity, r.precipitation, r.precipProbability);
       }
       this.db.exec("COMMIT");
     } catch (err) {
@@ -67,19 +72,20 @@ export class Store {
     return readings.length;
   }
 
-  /** Latest stored timestamp that has a pressure value, or null if none. */
-  latestTs(locationId: string, source: Source): number | null {
+  /** Latest stored timestamp that has a pressure value (and humidity, if asked), or null if none. */
+  latestTs(locationId: string, source: Source, withHumidity = false): number | null {
     const row = this.db
       .prepare(`SELECT MAX(ts) AS ts FROM readings
                 WHERE location_id = ? AND source = ?
-                  AND (surface_pressure IS NOT NULL OR msl_pressure IS NOT NULL)`)
+                  AND (surface_pressure IS NOT NULL OR msl_pressure IS NOT NULL)
+                  ${withHumidity ? "AND humidity IS NOT NULL" : ""}`)
       .get(locationId, source) as Row | undefined;
     return typeof row?.ts === "number" ? row.ts : null;
   }
 
   read(locationId: string, source: Source, from: number, to: number): Reading[] {
     const rows = this.db
-      .prepare(`SELECT ts, surface_pressure, msl_pressure, temperature, precipitation, precip_probability
+      .prepare(`SELECT ts, surface_pressure, msl_pressure, temperature, humidity, precipitation, precip_probability
                 FROM readings WHERE location_id = ? AND source = ? AND ts >= ? AND ts <= ?
                 ORDER BY ts`)
       .all(locationId, source, from, to) as Row[];
@@ -88,6 +94,7 @@ export class Store {
       surfacePressure: r.surface_pressure as number | null,
       mslPressure: r.msl_pressure as number | null,
       temperature: r.temperature as number | null,
+      humidity: r.humidity as number | null,
       precipitation: r.precipitation as number | null,
       precipProbability: r.precip_probability as number | null,
     }));

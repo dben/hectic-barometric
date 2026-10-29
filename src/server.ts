@@ -20,7 +20,9 @@ const MIME: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
 };
-const FIELDS = ["surfacePressure", "mslPressure", "temperature", "precipitation", "precipProbability"] as const;
+const FIELDS = [
+  "surfacePressure", "mslPressure", "temperature", "humidity", "precipitation", "precipProbability",
+] as const;
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {

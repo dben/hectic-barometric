@@ -4,9 +4,10 @@ import { getJson } from "./http.js";
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
 
-const FORECAST_VARS = "surface_pressure,pressure_msl,temperature_2m,precipitation,precipitation_probability";
+const FORECAST_VARS =
+  "surface_pressure,pressure_msl,temperature_2m,relative_humidity_2m,precipitation,precipitation_probability";
 // The archive has no precipitation probability.
-const ARCHIVE_VARS = "surface_pressure,pressure_msl,temperature_2m,precipitation";
+const ARCHIVE_VARS = "surface_pressure,pressure_msl,temperature_2m,relative_humidity_2m,precipitation";
 
 /** Open-Meteo's forecast endpoint returns at most 92 past days. */
 export const MAX_PAST_DAYS = 92;
@@ -17,6 +18,7 @@ interface OpenMeteoResponse {
     surface_pressure?: (number | null)[];
     pressure_msl?: (number | null)[];
     temperature_2m?: (number | null)[];
+    relative_humidity_2m?: (number | null)[];
     precipitation?: (number | null)[];
     precipitation_probability?: (number | null)[];
   };
@@ -34,6 +36,7 @@ export function parseOpenMeteo(json: unknown, keep: (ts: number) => boolean): Re
       surfacePressure: h?.surface_pressure?.[i] ?? null,
       mslPressure: h?.pressure_msl?.[i] ?? null,
       temperature: h?.temperature_2m?.[i] ?? null,
+      humidity: h?.relative_humidity_2m?.[i] ?? null,
       precipitation: h?.precipitation?.[i] ?? null,
       precipProbability: h?.precipitation_probability?.[i] ?? null,
     };

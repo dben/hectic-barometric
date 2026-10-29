@@ -786,6 +786,16 @@ function renderCharts() {
     ),
     axis(u.temp.label, 0),
   );
+  add(
+    $("chart-humidity"),
+    140,
+    withForecast(
+      active.map((s) => lineSeries(s, SOURCE_NAMES[s], 0, "%")),
+      active.map((s) => col(s, "humidity", (v) => v)),
+      "humidity", (v) => v, 0, "%",
+    ),
+    axis("%", 0),
+  );
   const bar = (source, label, fill, align) => ({
     ...lineSeries(source, label, u.precip.digits, u.precip.label),
     width: 0,

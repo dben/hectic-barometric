@@ -32,7 +32,13 @@ export class Collector {
   /** Fetch whatever each location is missing, from the last stored hour (or the backfill start) to now. */
   async syncOpenMeteo(loc: Location, now: number): Promise<number> {
     const floor = now - this.settings.backfillDays * DAY;
-    const since = Math.max(this.store.latestTs(loc.id, "open-meteo") ?? floor, floor);
+    // Rows stored before humidity was tracked lack it, so the first run after upgrading
+    // re-fetches the backfill window once. Upserts keep the values already stored.
+    const latest = Math.min(
+      this.store.latestTs(loc.id, "open-meteo") ?? floor,
+      this.store.latestTs(loc.id, "open-meteo", true) ?? floor,
+    );
+    const since = Math.max(latest, floor);
     let saved = 0;
     const archiveEnd = now - ARCHIVE_LAG_DAYS * DAY;
     if (now - since > (openMeteo.MAX_PAST_DAYS - 1) * DAY && since < archiveEnd) {

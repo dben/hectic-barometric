@@ -29,7 +29,7 @@ test("log, list with pressure context, and delete an event", async () => {
   const now = Math.floor(Date.now() / 1000);
   const hour = Math.round((now - 2 * H) / H) * H;
   const r = (ts: number, p: number) => ({
-    ts, surfacePressure: p, mslPressure: p + 13, temperature: null, precipitation: null, precipProbability: null,
+    ts, surfacePressure: p, mslPressure: p + 13, temperature: null, humidity: null, precipitation: null, precipProbability: null,
   });
   store.upsert("home", "open-meteo", [r(hour - 24 * H, 1015), r(hour, 1007)]);
 

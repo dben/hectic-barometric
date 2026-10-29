@@ -2,7 +2,7 @@
   "name": "hectic-barometric",
   "version": "0.1.0",
   "private": true,
-  "description": "Records hourly barometric pressure, temperature and precipitation for a set of locations",
+  "description": "Records hourly barometric pressure, temperature, humidity and precipitation for a set of locations",
   "type": "module",
   "engines": {
     "node": ">=22.13"
