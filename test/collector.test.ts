@@ -41,6 +41,7 @@ function fakeOpenMeteo(calls: URL[]) {
         surface_pressure: time.map(() => 1000),
         pressure_msl: time.map(() => 1013),
         temperature_2m: time.map(() => 10),
+        relative_humidity_2m: time.map(() => 60),
         precipitation: time.map(() => 0),
       },
     };
@@ -71,6 +72,27 @@ test("first run backfills a year from the archive, then fills recent days", asyn
   assert.equal(calls[0]!.searchParams.get("past_days"), "2");
 });
 
+test("rows stored before humidity was tracked are re-fetched once", async () => {
+  const store = new Store(":memory:");
+  const old = (ts: number) => ({
+    ts, surfacePressure: 990, mslPressure: 1010, temperature: 5, humidity: null, precipitation: 0, precipProbability: null,
+  });
+  store.upsert("home", "open-meteo", [old(NOW - 3600), old(NOW)]);
+  const calls: URL[] = [];
+  fakeOpenMeteo(calls);
+  const c = new Collector(store, [loc], settings);
+  await c.runOnce(NOW);
+
+  assert.ok(calls[0]!.hostname.startsWith("archive"));
+  const [row] = store.read("home", "open-meteo", NOW, NOW);
+  assert.equal(row!.humidity, 60);
+
+  calls.length = 0;
+  await c.runOnce(NOW + 3600);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.searchParams.get("past_days"), "2");
+});
+
 test("failures are recorded and don't stop other sources", async () => {
   globalThis.fetch = (async () => new Response("slow down", { status: 429 })) as typeof fetch;
   const store = new Store(":memory:");
@@ -81,7 +103,7 @@ test("failures are recorded and don't stop other sources", async () => {
 
 test("upsert keeps stored values when a later response has nulls, and prune drops old rows", () => {
   const store = new Store(":memory:");
-  const row = { ts: 100, surfacePressure: 1000, mslPressure: 1013, temperature: 5, precipitation: 0, precipProbability: 20 };
+  const row = { ts: 100, surfacePressure: 1000, mslPressure: 1013, temperature: 5, humidity: 70, precipitation: 0, precipProbability: 20 };
   store.upsert("home", "open-meteo", [row]);
   store.upsert("home", "open-meteo", [{ ...row, surfacePressure: 1001, precipProbability: null }]);
   assert.deepEqual(store.read("home", "open-meteo", 0, 200), [{ ...row, surfacePressure: 1001 }]);
@@ -91,7 +113,7 @@ test("upsert keeps stored values when a later response has nulls, and prune drop
 
 test("alignSeries merges sources onto shared timestamps", () => {
   const r = (ts: number, p: number) => ({
-    ts, surfacePressure: p, mslPressure: null, temperature: null, precipitation: null, precipProbability: null,
+    ts, surfacePressure: p, mslPressure: null, temperature: null, humidity: null, precipitation: null, precipProbability: null,
   });
   const { ts, series } = alignSeries({ "open-meteo": [r(0, 1), r(3600, 2)], nws: [r(3600, 3), r(7200, 4)] });
   assert.deepEqual(ts, [0, 3600, 7200]);

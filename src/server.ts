@@ -20,7 +20,9 @@ const MIME: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
 };
-const FIELDS = ["surfacePressure", "mslPressure", "temperature", "precipitation", "precipProbability"] as const;
+const FIELDS = [
+  "surfacePressure", "mslPressure", "temperature", "humidity", "precipitation", "precipProbability",
+] as const;
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -124,7 +126,7 @@ export function forecastResponse(
   return { ts: future.map((r) => r.ts), series, swings };
 }
 
-/** Each event with the Open-Meteo pressure at that hour and its change over the 24 h before. */
+/** Each event with the Open-Meteo pressure and humidity at that hour, and how each changed over the 24 h before. */
 export function eventsWithPressure(
   store: Store,
   locationId: string,
@@ -134,11 +136,16 @@ export function eventsWithPressure(
   return events.map((e) => {
     const hour = Math.round(e.ts / 3600) * 3600;
     const rows = store.read(locationId, "open-meteo", hour - 86_400, hour);
-    const at = (t: number) => rows.find((r) => r.ts === t)?.[field] ?? null;
-    const pressure = at(hour);
-    const before = at(hour - 86_400);
-    const change24h = pressure !== null && before !== null ? Math.round((pressure - before) * 100) / 100 : null;
-    return { id: e.id, kind: e.kind, ts: e.ts, note: e.note, pressure, change24h };
+    const at = (t: number, key: typeof field | "humidity") => rows.find((r) => r.ts === t)?.[key] ?? null;
+    const change = (now: number | null, before: number | null) =>
+      now !== null && before !== null ? Math.round((now - before) * 100) / 100 : null;
+    const pressure = at(hour, field);
+    const humidity = at(hour, "humidity");
+    return {
+      id: e.id, kind: e.kind, ts: e.ts, note: e.note,
+      pressure, change24h: change(pressure, at(hour - 86_400, field)),
+      humidity, humidityChange24h: change(humidity, at(hour - 86_400, "humidity")),
+    };
   });
 }
 

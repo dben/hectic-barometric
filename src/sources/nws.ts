@@ -14,6 +14,7 @@ interface Observation {
     rawMessage?: string;
     elevation?: Quantity;
     temperature?: Quantity;
+    relativeHumidity?: Quantity;
     barometricPressure?: Quantity;
     seaLevelPressure?: Quantity;
     precipitationLastHour?: Quantity;
@@ -64,6 +65,7 @@ export function parseObservations(features: Observation[]): Reading[] {
         surfacePressure: elevation === null ? null : round2(stationPressure(altHpa, elevation)),
         mslPressure: round2(slp != null ? slp / 100 : altHpa),
         temperature: p.temperature?.value ?? null,
+        humidity: p.relativeHumidity?.value == null ? null : Math.round(p.relativeHumidity.value * 10) / 10,
         precipitation: p.precipitationLastHour?.value ?? null,
         precipProbability: null,
       },

@@ -10,7 +10,7 @@ const H = 3600;
 const NOW = 1_800_000_000 - (1_800_000_000 % H);
 const loc = { id: "home", name: "Home", latitude: 35, longitude: -78 };
 const reading = (ts: number, p: number): Reading => ({
-  ts, surfacePressure: p, mslPressure: p + 13, temperature: 10, precipitation: 0, precipProbability: 0,
+  ts, surfacePressure: p, mslPressure: p + 13, temperature: 10, humidity: 50, precipitation: 0, precipProbability: 0,
 });
 
 const realFetch = globalThis.fetch;

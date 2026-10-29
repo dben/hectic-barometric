@@ -28,10 +28,10 @@ const post = (body: unknown) =>
 test("log, list with pressure context, and delete an event", async () => {
   const now = Math.floor(Date.now() / 1000);
   const hour = Math.round((now - 2 * H) / H) * H;
-  const r = (ts: number, p: number) => ({
-    ts, surfacePressure: p, mslPressure: p + 13, temperature: null, precipitation: null, precipProbability: null,
+  const r = (ts: number, p: number, humidity: number) => ({
+    ts, surfacePressure: p, mslPressure: p + 13, temperature: null, humidity, precipitation: null, precipProbability: null,
   });
-  store.upsert("home", "open-meteo", [r(hour - 24 * H, 1015), r(hour, 1007)]);
+  store.upsert("home", "open-meteo", [r(hour - 24 * H, 1015, 40), r(hour, 1007, 88)]);
 
   const created = await post({ location: "home", kind: "migraine", ts: now - 2 * H, note: "  left side  " });
   assert.equal(created.status, 201);
@@ -40,11 +40,14 @@ test("log, list with pressure context, and delete an event", async () => {
   assert.equal((await post({ location: "home", kind: "pre-migraine" })).status, 201);
 
   const list = (await (await fetch(`${base}/api/events?location=home&from=${now - 86400}&to=${now + 60}`)).json()) as {
-    kind: string; pressure: number | null; change24h: number | null;
+    kind: string; pressure: number | null; change24h: number | null; humidity: number | null;
+    humidityChange24h: number | null;
   }[];
   assert.deepEqual(list.map((e) => e.kind), ["migraine", "pre-migraine"]);
   assert.equal(list[0]?.pressure, 1007);
   assert.equal(list[0]?.change24h, -8);
+  assert.equal(list[0]?.humidity, 88);
+  assert.equal(list[0]?.humidityChange24h, 48);
 
   const patch = (body: unknown) =>
     fetch(`${base}/api/events/${event.id}`, { method: "PATCH", body: JSON.stringify(body) });

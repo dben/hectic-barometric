@@ -1,6 +1,6 @@
 # hectic-barometric
 
-Records hourly barometric pressure, temperature, precipitation and rain chance for a fixed set of locations, keeps a year of history in SQLite, and serves a one-page dashboard that charts it and highlights large pressure swings.
+Records hourly barometric pressure, temperature, humidity, precipitation and rain chance for a fixed set of locations, keeps a year of history in SQLite, and serves a one-page dashboard that charts it and highlights large pressure swings.
 
 ## Run it
 
@@ -38,6 +38,7 @@ To find a nearby NWS station, open `https://api.weather.gov/points/{lat},{lon}/s
 | Surface pressure | `surface_pressure` | Derived from the altimeter setting and station elevation |
 | Sea-level pressure | `pressure_msl` | `seaLevelPressure` from the hourly METAR, else the altimeter setting |
 | Temperature | `temperature_2m` | `temperature` |
+| Relative humidity | `relative_humidity_2m` | `relativeHumidity` |
 | Precipitation | `precipitation` (mm/h) | `precipitationLastHour`, often missing |
 | Rain chance | `precipitation_probability` (forecast API only, so not in backfilled history) | — |
 
@@ -48,6 +49,7 @@ Open-Meteo's free API is for non-commercial use, capped at 10,000 calls a day. T
 ## How collection works
 
 - On start, and then every hour at `COLLECT_MINUTE` past, each location is synced from its last stored hour up to now. A new location backfills `BACKFILL_DAYS` from the Open-Meteo archive, and gaps from downtime fill in on the next run (up to 92 days through the forecast API, older through the archive).
+- Databases from before humidity was tracked get the column added on start. The next run re-fetches the Open-Meteo backfill window once to fill humidity into existing hours; NWS fills in for the last ~7 days.
 - Readings older than `RETENTION_DAYS` are deleted after each run.
 - A failed source is logged and shown in the dashboard header. The next run picks up where it left off.
 

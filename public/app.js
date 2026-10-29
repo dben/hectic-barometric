@@ -523,6 +523,7 @@ async function updateEvent(ev, changes) {
 
 function renderEvents() {
   const p = units().pressure;
+  const delta = (v, digits) => `${v > 0 ? "▲ +" : v < 0 ? "▼ " : ""}${fmt(v, digits)}`;
   const body = $("event-rows");
   body.innerHTML = "";
   $("event-count").textContent = events.length ? `${events.length} in this range` : "none in this range";
@@ -532,15 +533,17 @@ function renderEvents() {
       fmtTime(ev.ts, state.days > 300),
       EVENT_NAMES[ev.kind],
       ev.pressure == null ? "–" : `${fmt(p.conv(ev.pressure), p.digits)} ${p.label}`,
-      ev.change24h == null ? "–" : `${ev.change24h > 0 ? "▲ +" : ev.change24h < 0 ? "▼ " : ""}${fmt(p.conv(ev.change24h), p.digits)}`,
+      ev.change24h == null ? "–" : delta(p.conv(ev.change24h), p.digits),
+      ev.humidity == null ? "–" : `${fmt(ev.humidity, 0)}%`,
+      ev.humidityChange24h == null ? "–" : delta(ev.humidityChange24h, 0),
       ev.note ?? "",
     ];
     cells.forEach((text, i) => {
       const td = document.createElement("td");
       td.textContent = text;
-      if (i === 2 || i === 3) td.className = "num";
+      if (i >= 2 && i <= 5) td.className = "num";
       if (i === 3 && ev.change24h) td.classList.add(ev.change24h < 0 ? "dir-fall" : "dir-rise");
-      if (i === 4) td.className = "note";
+      if (i === 6) td.className = "note";
       tr.append(td);
     });
     const td = document.createElement("td");
@@ -785,6 +788,16 @@ function renderCharts() {
       "temperature", u.temp.conv, u.temp.digits, u.temp.label,
     ),
     axis(u.temp.label, 0),
+  );
+  add(
+    $("chart-humidity"),
+    140,
+    withForecast(
+      active.map((s) => lineSeries(s, SOURCE_NAMES[s], 0, "%")),
+      active.map((s) => col(s, "humidity", (v) => v)),
+      "humidity", (v) => v, 0, "%",
+    ),
+    axis("%", 0),
   );
   const bar = (source, label, fill, align) => ({
     ...lineSeries(source, label, u.precip.digits, u.precip.label),

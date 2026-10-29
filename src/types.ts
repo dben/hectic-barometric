@@ -2,12 +2,13 @@ export type Source = "open-meteo" | "nws";
 
 export const SOURCES: readonly Source[] = ["open-meteo", "nws"];
 
-/** One hourly reading. Pressures in hPa, temperature in °C, precipitation in mm, probability in %. */
+/** One hourly reading. Pressures in hPa, temperature in °C, precipitation in mm, humidity and probability in %. */
 export interface Reading {
   ts: number; // unix seconds, UTC, top of the hour
   surfacePressure: number | null;
   mslPressure: number | null;
   temperature: number | null;
+  humidity: number | null;
   precipitation: number | null;
   precipProbability: number | null;
 }
