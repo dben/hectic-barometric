@@ -8,7 +8,7 @@ import { alignSeries } from "../src/server.js";
 const DAY = 86400;
 const NOW = Date.parse("2026-10-26T12:00:00Z") / 1000;
 const settings: Settings = {
-  port: 0, dbPath: ":memory:", locationsFile: "", retentionDays: 365, backfillDays: 365, collectMinute: 5,
+  port: 0, dbPath: ":memory:", locationsFile: "", retentionDays: 365, backfillDays: 365, collectMinute: 5, forecastDays: 7,
   nwsUserAgent: "test",
 };
 const loc = { id: "home", name: "Home", latitude: 35, longitude: -78 };

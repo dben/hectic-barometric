@@ -1,13 +1,14 @@
 import { Collector } from "./collector.js";
 import { loadLocations, loadSettings } from "./config.js";
 import { Store } from "./db.js";
+import { ForecastCache } from "./forecast.js";
 import { createApp } from "./server.js";
 
 const settings = loadSettings();
 const locations = loadLocations(settings.locationsFile);
 const store = new Store(settings.dbPath);
 const collector = new Collector(store, locations, settings);
-const server = createApp(store, locations, collector);
+const server = createApp(store, locations, collector, new ForecastCache(settings.forecastDays));
 
 server.listen(settings.port, () => {
   console.log(`[server] listening on :${settings.port} with ${locations.length} location(s): ${locations.map((l) => l.id).join(", ")}`);
