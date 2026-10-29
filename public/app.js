@@ -533,14 +533,15 @@ function renderEvents() {
       EVENT_NAMES[ev.kind],
       ev.pressure == null ? "–" : `${fmt(p.conv(ev.pressure), p.digits)} ${p.label}`,
       ev.change24h == null ? "–" : `${ev.change24h > 0 ? "▲ +" : ev.change24h < 0 ? "▼ " : ""}${fmt(p.conv(ev.change24h), p.digits)}`,
+      ev.humidity == null ? "–" : `${fmt(ev.humidity, 0)}%`,
       ev.note ?? "",
     ];
     cells.forEach((text, i) => {
       const td = document.createElement("td");
       td.textContent = text;
-      if (i === 2 || i === 3) td.className = "num";
+      if (i >= 2 && i <= 4) td.className = "num";
       if (i === 3 && ev.change24h) td.classList.add(ev.change24h < 0 ? "dir-fall" : "dir-rise");
-      if (i === 4) td.className = "note";
+      if (i === 5) td.className = "note";
       tr.append(td);
     });
     const td = document.createElement("td");

@@ -126,7 +126,7 @@ export function forecastResponse(
   return { ts: future.map((r) => r.ts), series, swings };
 }
 
-/** Each event with the Open-Meteo pressure at that hour and its change over the 24 h before. */
+/** Each event with the Open-Meteo pressure at that hour, its change over the 24 h before, and the humidity. */
 export function eventsWithPressure(
   store: Store,
   locationId: string,
@@ -138,9 +138,10 @@ export function eventsWithPressure(
     const rows = store.read(locationId, "open-meteo", hour - 86_400, hour);
     const at = (t: number) => rows.find((r) => r.ts === t)?.[field] ?? null;
     const pressure = at(hour);
+    const humidity = rows.find((r) => r.ts === hour)?.humidity ?? null;
     const before = at(hour - 86_400);
     const change24h = pressure !== null && before !== null ? Math.round((pressure - before) * 100) / 100 : null;
-    return { id: e.id, kind: e.kind, ts: e.ts, note: e.note, pressure, change24h };
+    return { id: e.id, kind: e.kind, ts: e.ts, note: e.note, pressure, change24h, humidity };
   });
 }
 
