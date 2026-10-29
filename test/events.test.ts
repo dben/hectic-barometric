@@ -41,11 +41,13 @@ test("log, list with pressure context, and delete an event", async () => {
 
   const list = (await (await fetch(`${base}/api/events?location=home&from=${now - 86400}&to=${now + 60}`)).json()) as {
     kind: string; pressure: number | null; change24h: number | null; humidity: number | null;
+    humidityChange24h: number | null;
   }[];
   assert.deepEqual(list.map((e) => e.kind), ["migraine", "pre-migraine"]);
   assert.equal(list[0]?.pressure, 1007);
   assert.equal(list[0]?.change24h, -8);
   assert.equal(list[0]?.humidity, 88);
+  assert.equal(list[0]?.humidityChange24h, 48);
 
   const patch = (body: unknown) =>
     fetch(`${base}/api/events/${event.id}`, { method: "PATCH", body: JSON.stringify(body) });
